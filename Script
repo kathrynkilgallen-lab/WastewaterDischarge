@@ -1,0 +1,72 @@
+import csv
+import requests
+import pandas as pd
+
+# Load the CSV file into a pandas DataFrame
+df = pd.read_csv('wastewater_permits.csv')
+
+# Filter the DataFrame for the specified counties
+filtered_df = df[df['COUNTY'].isin(['Burke', 'Avery', 'McDowell'])]
+
+# Display the first 5 rows of the filtered DataFrame
+display(filtered_df.head())
+
+# The direct REST API endpoint for the NPDES Wastewater Wastewater Permits layer
+# We request all fields (outFields=*) and output format as JSON
+url = "https://maps.deq.nc.gov/arcgis/rest/services/DEQ/ApplicationTracker/MapServer/5/query?f=json&where=1%3D1&returnGeometry=false&spatialRel=esriSpatialRelIntersects"
+params = {
+    "f": "json",  # Fetch data in JSON format
+    # Modify the 'where' clause to filter by specific counties
+    "where": "COUNTY IN ('Burke', 'Avery', 'McDowell')",
+    "outFields": "*",  # Requesting all fields
+    "returnGeometry": "false",  # Explicitly setting returnGeometry to false
+    "resultType": "json" # Adding this, sometimes needed for explicit JSON result type
+}
+
+# Adding a Referer header as some ArcGIS services might require it for origin checks
+headers = {
+    "Referer": "https://services.arcgis.com/"
+}
+
+print("Fetching data from NC DEQ servers...")
+response = requests.get(url, params=params, headers=headers)
+
+if response.status_code == 200:
+    data = response.json()
+    if "error" in data:
+        print(f"ArcGIS Service Error: {data['error']['message']}")
+        if 'details' in data['error'] and data['error']['details']:
+            for detail in data['error'] ['details']:
+                print(f"  Detail: {detail}")
+        else:
+            print("  No specific details provided by the server.")
+    else:
+        features = data.get("features", [])
+
+        if features:
+            # Extract headers from the attributes of the first record
+            headers = list(features[0]["attributes"].keys())
+
+            # Write data to CSV with the requested filename
+            filename = "wastewater_permits.csv"
+            with open(filename, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=headers)
+                writer.writeheader()
+
+                for feature in features:
+                    writer.writerow(feature["attributes"])
+
+            print(f"Success! Saved as '{filename}'")
+        else:
+            print("No features found in the response.")
+else:
+    print(f"Failed to fetch data. Status code: {response.status_code}")
+
+# Load the CSV file into a pandas DataFrame
+df = pd.read_csv('wastewater_permits.csv')
+
+# Filter the DataFrame for the specified counties
+filtered_df = df[df['COUNTY'].isin(['Burke', 'Avery', 'McDowell'])]
+
+# Display the first 5 rows of the filtered DataFrame
+filtered_df.to_csv('CountyPermits.csv', index=False)
